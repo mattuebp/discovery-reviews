@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Segredos
+.env
+
+# Dados coletados / banco
+*.db
+/dados/
