@@ -1,0 +1,32 @@
+[project]
+name = "discovery-reviews"
+version = "0.1.0"
+description = "Engine that collects public app reviews and turns them into product insight."
+requires-python = ">=3.11"
+
+# Runtime dependencies of the `motor` engine. Declared here now (DAY 2 -
+# foundation) even though most aren't wired up into code until DAY 4 -
+# this file is meant to describe the whole stack, not just what's used today.
+dependencies = [
+    "google-play-scraper>=1.2.7", # fetches public reviews from the Google Play store page
+    "anthropic>=0.40.0",          # Claude API client, used by the `enrich` pipeline stage
+    "python-dotenv>=1.0.1",       # loads secrets (like ANTHROPIC_API_KEY) from a local .env file
+]
+
+[project.optional-dependencies]
+# Only needed to develop/test the engine, not to run it in production.
+dev = [
+    "pytest>=8.0.0", # test runner (see CLAUDE.md rule 1: TDD is mandatory)
+]
+
+# NOTE: `sentence-transformers` (semantic grouping of similar complaints in
+# the `enrich` stage) is intentionally NOT listed yet. It's a heavy install
+# (pulls in PyTorch) and nothing uses it until `enrich` is actually
+# implemented (DAY 4/5). Add it then, not before.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["motor"]
