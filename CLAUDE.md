@@ -1,126 +1,133 @@
 # CLAUDE.md — Discovery Reviews
 
-> Este arquivo é a constituição do projeto. O Claude Code lê ele a cada sessão.
-> Regras aqui têm precedência sobre conveniência.
+> This file is the project's constitution. Claude Code reads it every session.
+> Rules here take precedence over convenience.
 
-## O que é este projeto
+## What this project is
 
-Um motor que coleta reviews públicas de apps, extrai insights e oportunidades de
-produto, e entrega um dashboard para um PM decidir. É um projeto **build-to-learn**
-e peça de **portfólio** de Matheus Prais. Não afiliado a nenhum app analisado.
+An engine that collects public app reviews, extracts insights and product
+opportunities, and delivers a dashboard for a PM to act on. It's a
+**build-to-learn** project and a **portfolio** piece by Matheus Prais. Not
+affiliated with any analyzed app.
 
-O caso inicial é o app **Hevy** (musculação), mas o sistema deve servir para
-**qualquer app**.
-
----
-
-## ⚠️ Regras inegociáveis (valem em TODA sessão)
-
-1. **TDD é obrigatório.** Escreva os testes que falham ANTES de qualquer
-   implementação. NÃO escreva código de produção até o Matheus aprovar os testes.
-   Qualquer implementação sem teste será recusada.
-2. **Alinhar antes de executar.** Proponha o plano e espere aprovação antes de
-   criar ou editar arquivos (use plan mode). Este projeto valoriza discussão antes
-   do build.
-3. **Sem otimização prematura.** Nos dias de código (DIA 4), o foco é passar nos
-   testes. Otimização, jobs e refactoring só no DIA 5.
-4. **Governança de dados.** Só feed público, cadência baixa, sem burlar proteção
-   anti-bot. Autor de review é PII → pseudonimizar. Segredos só em `.env` (nunca
-   commitado). Ver `docs/governanca.md`.
-5. **Honestidade metodológica.** Nunca fabricar métricas. A amostra de reviews é
-   enviesada; código e relatórios devem deixar isso explícito.
+The initial case study is the app **Hevy** (strength training), but the
+system is designed to work for **any app**.
 
 ---
 
-## Decisões de arquitetura
+## ⚠️ Non-negotiable rules (apply in EVERY session)
 
-- **Portas e adaptadores.** Uma interface neutra `ReviewSource` define o contrato de
-  coleta. Hoje existe só `GooglePlaySource`. O adaptador de App Store entra depois,
-  sem tocar no resto do sistema.
-- **App-agnóstico + projeto de análise.** O sistema analisa qualquer app. Um
-  "projeto de análise" tem um app **central** + N **concorrentes**. O motor trata
-  todos igual; "central vs concorrente" é só um papel (flag). Apenas a montagem do
-  relatório usa esse papel: a seção de concorrência é a mesma análise rodada nos
-  concorrentes, pela ótica do app central.
-- **Schema canônico neutro de plataforma.** Todo adaptador devolve o mesmo registro
-  de review. É o que permite somar Google + App Store no futuro.
+1. **TDD is mandatory.** Write failing tests BEFORE any implementation. Do
+   NOT write production code until Matheus approves the tests. Any
+   implementation without a test will be rejected.
+2. **Align before executing.** Propose the plan and wait for approval before
+   creating or editing files (use plan mode). This project values discussion
+   before building.
+3. **No premature optimization.** On coding days (DAY 4), the focus is
+   passing tests. Optimization, jobs, and refactoring only happen on DAY 5.
+4. **Data governance.** Public feed only, low request rate, no anti-bot
+   evasion. A review's author is PII → pseudonymize it. Secrets only in
+   `.env` (never committed). See `docs/governanca.md`.
+5. **Methodological honesty.** Never fabricate metrics. The review sample is
+   biased; code and reports must make that explicit.
+
+---
+
+## Architecture decisions
+
+- **Ports and adapters.** A neutral `ReviewSource` interface defines the
+  collection contract. Today only `GooglePlaySource` exists. The App Store
+  adapter comes later, without touching the rest of the system.
+- **App-agnostic + analysis project.** The system analyzes any app. An
+  "analysis project" has one **primary** app + N **competitors**. The engine
+  treats them all the same; "primary vs. competitor" is just a role (flag).
+  Only report assembly uses that role: the competitive section is the same
+  analysis run on the competitors, viewed through the primary app's lens.
+- **Platform-neutral canonical schema.** Every adapter returns the same
+  review record. That's what allows combining Google + App Store data in the
+  future.
 
 ---
 
 ## Stack
 
-- **Motor:** Python. Testes com **pytest**. Coleta com **google-play-scraper**.
-- **Banco:** SQLite (arquivo único, simples) — suficiente para build-to-learn.
-  Postgres fica como opção futura.
-- **Enriquecimento:** LLM (Claude via API Anthropic) para rotular
-  tema/sentimento/pedido-de-feature e canonicalizar nomes; agrupamento semântico por
-  embeddings — biblioteca a definir no DIA 2/3 (recomendação: `sentence-transformers`
-  local, grátis).
-- **Dashboard:** HTML self-contained (dark, dourado #FFC000, Bebas Neue + Barlow —
-  mesmo padrão do protótipo já feito). Lê os dados que o estágio de relatório gera.
-- **Estrutura:** monorepo.
-- **Idioma:** identificadores de código em **inglês** (padrão de portfólio
-  internacional); texto de review preserva o idioma original; docs e comentários
-  podem ser em português. (Se preferir tudo em pt, é só avisar.)
+- **Engine:** Python. Tests with **pytest**. Collection with
+  **google-play-scraper**.
+- **Database:** SQLite (single file, simple) — enough for build-to-learn.
+  Postgres remains a future option.
+- **Enrichment:** LLM (Claude via the Anthropic API) to label
+  theme/sentiment/feature-request and canonicalize names; semantic grouping
+  via embeddings — library to be decided on DAY 2/3 (recommendation: local,
+  free `sentence-transformers`).
+- **Dashboard:** self-contained HTML (dark theme, gold #FFC000, Bebas Neue +
+  Barlow — same style as the prototype already built). Reads the data the
+  report stage generates.
+- **Structure:** monorepo.
+- **Language:** code identifiers in **English** (international portfolio
+  standard); review text preserves its original language; docs and comments
+  can be in English or Portuguese depending on audience. (If you'd rather
+  have everything in Portuguese, just say so.)
 
 ---
 
-## Pipeline (5 estágios — cada um testável isolado)
+## Pipeline (5 stages — each independently testable)
 
-1. **collect** — puxa reviews de um app via adaptador.
-2. **normalize** — converte pro schema canônico, gera chave de dedup, remove
-   repetidas entre execuções.
-3. **enrich** — LLM rotula e agrupa queixas semelhantes em candidatos canônicos.
-4. **store** — persiste no banco de forma idempotente.
-5. **report** — agrega em insights + oportunidades e gera os dados do dashboard.
+1. **collect** — pulls reviews for an app via an adapter.
+2. **normalize** — converts to the canonical schema, generates a dedup key,
+   removes duplicates across runs.
+3. **enrich** — LLM labels and groups similar complaints into canonical
+   candidates.
+4. **store** — persists to the database idempotently.
+5. **report** — aggregates into insights + opportunities and generates the
+   dashboard data.
 
 ---
 
-## Contrato de dado — Review canônica
+## Data contract — Canonical review
 
-Todo adaptador devolve este registro:
+Every adapter returns this record:
 
-| campo | descrição |
+| field | description |
 |---|---|
-| `dedup_id` | hash de plataforma+app+autor+data+texto |
+| `dedup_id` | hash of platform+app+author+date+text |
 | `platform` | `google_play` \| `app_store` |
-| `app_id` | pacote / id da loja |
-| `country` | storefront (ex.: `br`) |
+| `app_id` | store package / id |
+| `country` | storefront (e.g. `br`) |
 | `rating` | 1–5 |
-| `title` | título (pode ser vazio no Google Play) |
-| `body` | texto da review |
-| `author_hash` | **PII pseudonimizada** — nunca guardar autor cru |
-| `app_version` | versão avaliada |
+| `title` | title (can be empty on Google Play) |
+| `body` | review text |
+| `author_hash` | **pseudonymized PII** — never store the raw author |
+| `app_version` | reviewed app version |
 | `review_date` | ISO 8601 |
-| `helpful_votes` | votos "útil" |
-| `dev_reply` | resposta do desenvolvedor (texto ou nulo) |
-| `lang` | idioma detectado |
-| `collected_at` | timestamp da coleta |
+| `helpful_votes` | "helpful" votes |
+| `dev_reply` | developer reply (text or null) |
+| `lang` | detected language |
+| `collected_at` | collection timestamp |
 
-Campos de enriquecimento (adicionados no estágio `enrich`):
+Enrichment fields (added at the `enrich` stage):
 `themes[]`, `sentiment`, `is_feature_request`, `opportunity_tag`.
 
 ---
 
-## Estrutura de pastas
+## Folder structure
 
 ```
 discovery-reviews/
 ├── CLAUDE.md
 ├── README.md
 ├── .gitignore
-├── .env.example            # template de variáveis (nunca commitar .env real)
-├── pyproject.toml          # deps do motor
+├── .env.example            # variable template (never commit the real .env)
+├── pyproject.toml          # engine dependencies
 ├── docs/
-│   ├── governanca.md       # DIA 1: PII, ToS, sandbox
-│   ├── contrato-dados.md   # schema canônico da review
+│   ├── governanca.md       # DAY 1: PII, ToS, sandbox
+│   ├── contrato-dados.md   # canonical review schema
 │   └── plano-8-dias.md
-├── motor/                  # backend Python
+├── motor/                  # Python backend
 │   ├── __init__.py
-│   ├── sources/            # adaptadores (portas & adaptadores)
+│   ├── sources/            # adapters (ports & adapters)
 │   │   ├── __init__.py
-│   │   ├── base.py         # interface ReviewSource (abstrata)
-│   │   └── google_play.py  # GooglePlaySource (único agora)
+│   │   ├── base.py         # ReviewSource interface (abstract)
+│   │   └── google_play.py  # GooglePlaySource (the only one for now)
 │   ├── pipeline/
 │   │   ├── __init__.py
 │   │   ├── collect.py
@@ -131,12 +138,12 @@ discovery-reviews/
 │   ├── models/             # dataclasses: Review, Project, App
 │   │   └── __init__.py
 │   └── db/
-│       └── schema.sql      # DIA 2: criação do banco
-├── dashboard/              # HTML self-contained (saída DIA 6)
+│       └── schema.sql      # DAY 2: database creation
+├── dashboard/              # self-contained HTML (DAY 6 output)
 │   └── template.html
-├── contrato/               # schemas compartilhados
+├── contrato/               # shared schemas
 │   └── review.schema.json
-└── tests/                  # pytest (DIA 3: escritos ANTES do código)
+└── tests/                  # pytest (DAY 3: written BEFORE the code)
     ├── __init__.py
     ├── test_google_play.py
     ├── test_normalize.py
@@ -146,31 +153,37 @@ discovery-reviews/
 
 ---
 
-## Plano de 8 dias
+## 8-day plan
 
-- **DIA 0 — Definição do problema.** Feito (ver `docs/`).
-- **DIA 1 — Sandbox: isolamento e governança.** git, `.gitignore`, `.env.example`,
-  `docs/governanca.md`, política de PII e postura de ToS. Nenhum código de coleta.
-- **DIA 2 — Fundação.** Monorepo, este CLAUDE.md, schema do banco, interface
-  `ReviewSource` e modelos.
-- **DIA 3 — TDD.** Escrever TODOS os testes antes de qualquer código.
-- **DIA 4 — Código.** Implementar até passar nos testes (sem otimizar).
-- **DIA 5 — Otimização.** Jobs, processamento pesado, refactoring.
-- **DIA 6 — Interface de saída.** Dashboard HTML mobile-first.
-- **DIA 7 — Esteira.** CI/CD, linters, code smells, testes, varredura de
-  vulnerabilidades.
-- **DIA 8 — Deploy.**
+- **DAY 0 — Problem definition.** Done (see `docs/`).
+- **DAY 1 — Sandbox: isolation and governance.** git, `.gitignore`,
+  `.env.example`, `docs/governanca.md`, PII policy and ToS posture. No
+  collection code.
+- **DAY 2 — Foundation.** Monorepo, this CLAUDE.md, database schema,
+  `ReviewSource` interface, and models.
+- **DAY 3 — TDD.** Write ALL tests before any code.
+- **DAY 4 — Code.** Implement until tests pass (no optimizing).
+- **DAY 5 — Optimization.** Jobs, heavy processing, refactoring.
+- **DAY 6 — Output interface.** Mobile-first HTML dashboard.
+- **DAY 7 — Pipeline hardening.** CI/CD, linters, code smells, tests,
+  vulnerability scanning.
+- **DAY 8 — Deploy.**
 
 ---
 
-## Governança & PII (resumo — detalhe em `docs/governanca.md`)
+## Governance & PII (summary — detail in `docs/governanca.md`)
 
-- Só feed/scraper público; cadência baixa com backoff; não burlar anti-bot.
-- `author` nunca é armazenado cru → guardar `author_hash`.
-- `.env` com segredos (`ANTHROPIC_API_KEY` etc.) nunca vai pro git.
-- Banco e dados coletados (`*.db`, `/dados/`) ficam fora do git.
+- Public feed/scraper only; low request rate with backoff; no anti-bot
+  evasion.
+- `author` is never stored raw → store `author_hash` instead.
+- `.env` with secrets (`ANTHROPIC_API_KEY`, etc.) never goes into git.
+- Database and collected data (`*.db`, `/dados/`) stay out of git.
 
-## Convenções
+## Conventions
 
-- Commits pequenos e descritivos. Branch principal: `main`.
-- Nenhum segredo no código ou no histórico do git.
+- Small, descriptive commits. Main branch: `main`.
+- No secrets in code or in git history.
+- Every file created for this project carries explanatory comments spelling
+  out what things are (fields, sections, config keys, etc.) — the project
+  owner is non-technical/business background and is using this codebase to
+  learn, so files should be self-teaching, not just functional.
