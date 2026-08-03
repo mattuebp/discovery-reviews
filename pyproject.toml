@@ -30,3 +30,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["motor"]
+
+# Lets `pytest` be run from the repo root with no extra flags/arguments -
+# it only looks inside tests/, matching the folder structure in CLAUDE.md.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
