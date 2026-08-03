@@ -186,8 +186,8 @@ Built in phases, roughly one focus area per working session:
 
 - ✅ Problem definition
 - ✅ Sandbox setup — isolation & governance (this stage)
-- ⬜ Foundation — data model & source interface
-- ⬜ Tests written (test-driven development)
+- ✅ Foundation — data model & source interface
+- ✅ Tests written (test-driven development)
 - ⬜ Core implementation
 - ⬜ Optimization & background jobs
 - ⬜ Output dashboard
