@@ -36,5 +36,7 @@ for summary in summarize_themes(enriched):
     )
     for quote in reviews_for_theme(enriched, summary.theme)[:2]:
         tag = f"  [opportunity: {quote.opportunity_tag}]" if quote.opportunity_tag else ""
-        print(f'    "{quote.body[:100]}"{tag}')
+        other_themes = [t for t in quote.themes if t != summary.theme]
+        also_in = f"  (also tagged: {', '.join(other_themes)})" if other_themes else ""
+        print(f'    "{quote.body}"{tag}{also_in}')
     print()
