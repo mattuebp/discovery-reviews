@@ -9,3 +9,4 @@ __pycache__/
 # Dados coletados / banco
 *.db
 /dados/
+scripts/output/
