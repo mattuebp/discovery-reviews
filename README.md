@@ -57,13 +57,23 @@ job and can be tested independently before moving to the next.
    runs.
    > **In plain terms:** making sure every review is filed the same way,
    > with no review counted twice.
-3. **Enrich** — an AI (Claude) reads each review and tags it: what topic
-   it's about, whether the tone is positive/negative/neutral, whether it's
-   really a feature request in disguise, and groups similar complaints
-   together.
+3. **Enrich** — Claude reads each review and tags it: what topic it's
+   about, whether the tone is positive/negative/neutral, whether it's
+   really a feature request in disguise, and a short tag naming the
+   underlying opportunity. This happens one of two ways, with identical
+   results either way: **manually**, by exporting reviews to a file you
+   attach to a Claude Code conversation (using a Claude subscription
+   already being paid for, at no extra cost); or **automatically**, via a
+   direct, metered call to the Anthropic API (useful once this needs to run
+   on an unattended schedule). Grouping different wordings of the same
+   complaint together (e.g. "syncing is broken" and "my data won't sync")
+   is a planned future addition, not built yet.
    > **In plain terms:** the AI plays the role of an analyst skimming every
    > review and sorting it into labeled piles, at a scale no human could do
-   > by hand.
+   > by hand. Today, that analyst can be "paid" one of two ways: hand them
+   > a folder to review in one sitting (an existing Claude subscription, no
+   > extra cost), or put them on retainer for automatic, unattended work (a
+   > separate paid API key, billed per review).
 4. **Store** — saves everything to a database, safely re-running without
    creating duplicate entries.
    > **In plain terms:** filing the labeled reviews into a cabinet you can
@@ -109,6 +119,20 @@ same structured record before anything else happens to it.
 > math on them. It's what lets the system eventually combine Google Play and
 > App Store reviews into one unified analysis instead of two separate ones.
 
+### Two ways to enrich, same result downstream
+Labeling a review can happen automatically (a paid, metered Anthropic API
+call) or manually (export reviews to a file, label them through a Claude
+Code conversation using a subscription already being paid for, then feed the
+results back in). Both paths write the exact same four label fields onto a
+review, so storing and reporting never know — or care — which one produced
+them.
+
+> **In plain terms:** it's the difference between hiring an analyst on
+> retainer (paid per review, works unattended) versus handing a folder to a
+> colleague already on staff for a working session (already paid for, just
+> takes a human moment). Either way, the same analyst — Claude — does the
+> actual reading, and everything downstream treats the result identically.
+
 ---
 
 ## 5. Tech stack — what each piece is for
@@ -118,7 +142,8 @@ same structured record before anything else happens to it.
 | **Python + pytest** | The programming language the engine is built in, and the tool used to write automated checks that catch bugs before they ship. |
 | **google-play-scraper** | The library that actually fetches public review data from Google Play. |
 | **SQLite** | A simple, single-file database — no server to set up. Good enough for a project this size; a heavier database (Postgres) is a possible future upgrade if the project grows. |
-| **Claude (Anthropic API)** | The AI model that reads and labels each review (the "enrich" stage). |
+| **Claude, via Claude Code (default)** | Reads and labels reviews at no extra cost, using an existing Claude subscription — export a file, label it in a Claude Code conversation, feed the results back in. |
+| **Claude, via the Anthropic API (optional)** | The same labeling, fully automated and billed separately per review — worth adding once the pipeline needs to run unattended on a schedule. |
 | **sentence-transformers** (planned) | A free, local tool that measures how *similar in meaning* two pieces of text are — used to group different wordings of the same complaint together (e.g. "syncing is broken" and "my data won't sync" end up in the same bucket). |
 | **Self-contained HTML dashboard** | The final output: a single HTML file (dark theme, gold accents) that displays the insights — no app install or server needed to view it. |
 
@@ -188,7 +213,9 @@ Built in phases, roughly one focus area per working session:
 - ✅ Sandbox setup — isolation & governance (this stage)
 - ✅ Foundation — data model & source interface
 - ✅ Tests written (test-driven development)
-- ⬜ Core implementation
+- ✅ Core implementation — including two interchangeable ways to label
+  reviews with AI (a free, manual path via Claude Code, and an optional
+  paid API path for full automation)
 - ⬜ Optimization & background jobs
 - ⬜ Output dashboard
 - ⬜ CI/CD & quality pipeline

@@ -55,10 +55,23 @@ system is designed to work for **any app**.
   **google-play-scraper**.
 - **Database:** SQLite (single file, simple) — enough for build-to-learn.
   Postgres remains a future option.
-- **Enrichment:** LLM (Claude via the Anthropic API) to label
-  theme/sentiment/feature-request and canonicalize names; semantic grouping
-  via embeddings — library to be decided on DAY 2/3 (recommendation: local,
-  free `sentence-transformers`).
+- **Enrichment:** LLM (Claude) labels each review with
+  theme/sentiment/feature-request/opportunity-tag. Two interchangeable
+  implementations produce identical output, so `store`/`report` never know
+  which one ran:
+  - `motor/pipeline/manual_labeling.py` (`export_for_labeling` +
+    `apply_labels`) — the default for this project's scale. Writes reviews
+    to a self-describing JSON file, labeled by hand (or by attaching it to
+    a Claude Code conversation, using a Claude subscription instead of a
+    separate metered key), then merges the results back in.
+  - `motor/pipeline/enrich.py` (`enrich()`) — calls the Anthropic API
+    directly for full, unattended automation. Requires `ANTHROPIC_API_KEY`
+    and its own separate billing — a DAY 5+ concern (scheduled jobs), not
+    required before then.
+  - Semantic grouping of similar-wording complaints into one canonical
+    candidate (via embeddings, e.g. "syncing is broken" / "my data won't
+    sync" → one bucket) is still planned, not yet implemented — library to
+    be decided (recommendation: local, free `sentence-transformers`).
 - **Dashboard:** self-contained HTML (dark theme, gold #FFC000, Bebas Neue +
   Barlow — same style as the prototype already built). Reads the data the
   report stage generates.
@@ -75,8 +88,13 @@ system is designed to work for **any app**.
 1. **collect** — pulls reviews for an app via an adapter.
 2. **normalize** — converts to the canonical schema, generates a dedup key,
    removes duplicates across runs.
-3. **enrich** — LLM labels and groups similar complaints into canonical
-   candidates.
+3. **enrich** — labels each review (themes, sentiment, feature-request flag,
+   opportunity tag), via either `enrich()` (Anthropic API, needs a key) or
+   `manual_labeling.py`'s export/apply-labels pair (no key needed — labeled
+   through an attached Claude Code conversation instead). Both write the
+   same four fields onto `Review`, so nothing downstream cares which one
+   ran. Grouping similar-wording complaints into one canonical candidate
+   (via embeddings) is still planned, not yet built.
 4. **store** — persists to the database idempotently.
 5. **report** — aggregates into insights + opportunities and generates the
    dashboard data.
@@ -127,12 +145,12 @@ discovery-reviews/
 │   ├── sources/            # adapters (ports & adapters)
 │   │   ├── __init__.py
 │   │   ├── base.py         # ReviewSource interface (abstract)
-│   │   └── google_play.py  # GooglePlaySource (the only one for now)
+│   │   └── google_play.py  # GooglePlaySource - collect() lives here, not in pipeline/
 │   ├── pipeline/
 │   │   ├── __init__.py
-│   │   ├── collect.py
 │   │   ├── normalize.py
-│   │   ├── enrich.py
+│   │   ├── enrich.py           # AI labeling via the Anthropic API (needs a key)
+│   │   ├── manual_labeling.py  # AI labeling with no API key (export_for_labeling + apply_labels)
 │   │   ├── store.py
 │   │   └── report.py
 │   ├── models/             # dataclasses: Review, Project, App
@@ -145,10 +163,13 @@ discovery-reviews/
 │   └── review.schema.json
 └── tests/                  # pytest (DAY 3: written BEFORE the code)
     ├── __init__.py
+    ├── conftest.py
     ├── test_google_play.py
     ├── test_normalize.py
     ├── test_enrich.py
-    └── test_store.py
+    ├── test_manual_labeling.py
+    ├── test_store.py
+    └── test_report.py
 ```
 
 ---
