@@ -22,13 +22,18 @@ class ReviewSource(ABC):
     """
 
     @abstractmethod
-    def collect(self, app_id: str, country: str) -> Iterable[dict[str, Any]]:
+    def collect(self, app_id: str, country: str, count: int = 300) -> Iterable[dict[str, Any]]:
         """Fetch raw reviews for one app.
 
         Args:
             app_id: the store's identifier for the app (e.g. a Google Play
                 package name like "com.hevy.app").
             country: storefront/country code (e.g. "br").
+            count: how many raw reviews to fetch - a bounded pool to draw
+                from, not necessarily how many end up analyzed. Narrowing
+                that pool down (e.g. a random subsample, a rating filter)
+                is a separate, adapter-agnostic concern - see
+                motor/pipeline/selection.py.
 
         Returns:
             An iterable of raw review records, in whatever shape the

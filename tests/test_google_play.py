@@ -50,10 +50,12 @@ def test_collect_returns_the_raw_dicts_unchanged(monkeypatch):
     assert result == raw_reviews
 
 
-def test_collect_requests_a_bounded_page_size(monkeypatch):
+def test_collect_requests_a_bounded_pool_size_by_default(monkeypatch):
     # Governance rule: low request rate, no "fetch everything unbounded"
-    # calls. This test just requires *some* sane, explicit bound - the
-    # exact number is an implementation detail, not part of the contract.
+    # calls. google_play_scraper.reviews() satisfies a single request
+    # internally up to MAX_COUNT_EACH_FETCH=4500 reviews before it would
+    # need to loop for more - so that's the real ceiling for "still one
+    # bounded call," not an arbitrary smaller number.
     fake_fetch = MagicMock(return_value=([], None))
     monkeypatch.setattr(google_play_module, "_fetch_reviews", fake_fetch)
 
@@ -61,4 +63,16 @@ def test_collect_requests_a_bounded_page_size(monkeypatch):
 
     count = fake_fetch.call_args.kwargs.get("count")
     assert count is not None, "collect() must request a bounded number of reviews, not unbounded"
-    assert 0 < count <= 200
+    assert 0 < count <= 4500
+
+
+def test_collect_accepts_a_custom_pool_size(monkeypatch):
+    # Pool size (how many raw reviews to fetch) must be configurable by the
+    # caller, not just accepted and silently ignored in favor of a fixed
+    # default - this is what random_sample() draws its subsample from.
+    fake_fetch = MagicMock(return_value=([], None))
+    monkeypatch.setattr(google_play_module, "_fetch_reviews", fake_fetch)
+
+    list(GooglePlaySource().collect(app_id="com.hevy.app", country="br", count=250))
+
+    assert fake_fetch.call_args.kwargs.get("count") == 250

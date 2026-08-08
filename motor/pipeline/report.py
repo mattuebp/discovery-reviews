@@ -16,9 +16,11 @@ from motor.models import Project, Review
 NEGATIVE_SENTIMENT_GAP_THRESHOLD = 0.15
 
 BIAS_DISCLAIMER = (
-    "This sample reflects only users who chose to write a public review - it "
-    "is not a representative survey of the full user base and must not be "
-    "presented as one (see docs/governanca.md, 'Honestidade metodologica')."
+    "This sample reflects only users who chose to write a public review, and "
+    "is drawn from the most recently posted reviews rather than the app's "
+    "full historical review base - it is not a representative survey of the "
+    "full user base and must not be presented as one (see docs/governanca.md, "
+    "'Honestidade metodologica')."
 )
 
 
