@@ -223,5 +223,9 @@ Built in phases, roughly one focus area per working session:
 
 ---
 
+*Want to run the pipeline yourself and see it label real reviews? See
+[`docs/how-to-test.md`](docs/how-to-test.md) — a step-by-step guide, no
+coding experience assumed.*
+
 *For the day-to-day engineering rules this project follows (testing
 discipline, architecture rules, etc.), see [`CLAUDE.md`](CLAUDE.md).*

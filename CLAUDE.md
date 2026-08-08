@@ -138,6 +138,7 @@ discovery-reviews/
 ├── pyproject.toml          # engine dependencies
 ├── docs/
 │   ├── governanca.md       # DAY 1: PII, ToS, sandbox
+│   ├── how-to-test.md      # non-technical, step-by-step manual-labeling walkthrough
 │   ├── contrato-dados.md   # canonical review schema
 │   └── plano-8-dias.md
 ├── motor/                  # Python backend
@@ -149,6 +150,7 @@ discovery-reviews/
 │   ├── pipeline/
 │   │   ├── __init__.py
 │   │   ├── normalize.py
+│   │   ├── selection.py        # random_sample() + filter_by_rating(), adapter-agnostic
 │   │   ├── enrich.py           # AI labeling via the Anthropic API (needs a key)
 │   │   ├── manual_labeling.py  # AI labeling with no API key (export_for_labeling + apply_labels)
 │   │   ├── store.py
@@ -157,6 +159,10 @@ discovery-reviews/
 │   │   └── __init__.py
 │   └── db/
 │       └── schema.sql      # DAY 2: database creation
+├── scripts/                # thin, untested wrappers around motor/ - no logic of their own
+│   ├── 1_collect_and_export.py       # collect -> normalize -> filter/sample -> export
+│   ├── 3_apply_labels_and_report.py  # apply_labels -> print theme/opportunity report
+│   └── output/              # gitignored - collected data never goes into git
 ├── dashboard/              # self-contained HTML (DAY 6 output)
 │   └── template.html
 ├── contrato/               # shared schemas
@@ -166,6 +172,7 @@ discovery-reviews/
     ├── conftest.py
     ├── test_google_play.py
     ├── test_normalize.py
+    ├── test_selection.py
     ├── test_enrich.py
     ├── test_manual_labeling.py
     ├── test_store.py
