@@ -139,6 +139,7 @@ discovery-reviews/
 ├── docs/
 │   ├── governanca.md       # DAY 1: PII, ToS, sandbox
 │   ├── how-to-test.md      # non-technical, step-by-step manual-labeling walkthrough
+│   ├── session-history.md  # narrative changelog - read first when resuming work
 │   ├── contrato-dados.md   # canonical review schema
 │   └── plano-8-dias.md
 ├── motor/                  # Python backend
@@ -215,3 +216,10 @@ discovery-reviews/
   out what things are (fields, sections, config keys, etc.) — the project
   owner is non-technical/business background and is using this codebase to
   learn, so files should be self-teaching, not just functional.
+- **Update `docs/session-history.md` every time you commit.** Add a new
+  entry (newest on top) summarizing what changed and *why* — decisions,
+  dead ends, rationale a diff alone won't show. This is what lets work
+  continue from a different machine or a fresh conversation without losing
+  context; read it first when picking this project back up. If something
+  is left mid-flight and uncommitted at the end of a session, note that in
+  the "In progress" section at the top before stopping.
