@@ -29,8 +29,8 @@ APP_ID = "com.hevy"  # the app's real Google Play package id
 COUNTRY = "us"  # storefront/country code, e.g. "us", "br"
 
 POOL_SIZE = 300  # how many recent reviews to fetch from Google Play (one bounded request)
-SAMPLE_SIZE = 100  # how many of those to randomly analyze
-RATING_FILTER = None  # e.g. [1, 2] to only look at 1-2 star reviews; None to look at all ratings
+SAMPLE_SIZE = 300  # how many of those to randomly analyze
+RATING_FILTER = [1, 2 , 3, 4]  # e.g. [1, 2] to only look at 1-2 star reviews; None to look at all ratings
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
