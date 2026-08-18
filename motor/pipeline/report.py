@@ -7,6 +7,7 @@ comparisons a PM reads in the DAY 6 dashboard. Pure functions over
 """
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 from motor.models import Project, Review
 
@@ -14,6 +15,12 @@ from motor.models import Project, Review
 # percentage points of negative sentiment isn't a meaningful signal - see
 # TestCompareApps.test_does_not_flag_a_theme_within_the_gap_threshold.
 NEGATIVE_SENTIMENT_GAP_THRESHOLD = 0.15
+
+# How dominant one sentiment has to be, as a share of a theme's mentions,
+# before the theme is labeled "pain" or "strength" rather than "mixed" - see
+# TestClassifyTheme. Validated against a real 36-review Hevy batch (the
+# Product Opportunity Report artifact) before being promoted here.
+THEME_CLASSIFICATION_THRESHOLD = 0.65
 
 BIAS_DISCLAIMER = (
     "This sample reflects only users who chose to write a public review, and "
@@ -82,6 +89,59 @@ def reviews_for_theme(reviews: list[Review], theme: str) -> list[Review]:
     return [review for review in reviews if theme in review.themes]
 
 
+def classify_theme(summary: ThemeSummary) -> Literal["pain", "strength", "mixed"]:
+    """Label a theme "pain" (negative-dominant), "strength" (positive-dominant),
+    or "mixed" (neither), so a PM can scan themes without eyeballing the raw
+    sentiment counts. A theme with zero mentions has no signal either way, so
+    it classifies as "mixed" rather than raising a division-by-zero error.
+    """
+
+    if summary.count == 0:
+        return "mixed"
+    if summary.negative / summary.count >= THEME_CLASSIFICATION_THRESHOLD:
+        return "pain"
+    if summary.positive / summary.count >= THEME_CLASSIFICATION_THRESHOLD:
+        return "strength"
+    return "mixed"
+
+
+@dataclass
+class OpportunitySummary:
+    """One distinct ask or fix, and how many reviews back it."""
+
+    tag: str
+    count: int
+    themes: list[str]  # every theme any review carrying this tag also has
+    is_feature_request: bool  # true if ANY review carrying this tag is a feature request
+    sample_review: Review  # first review carrying this tag, for a real quote
+
+
+def summarize_opportunities(reviews: list[Review]) -> list[OpportunitySummary]:
+    """Group reviews by `opportunity_tag`, most-mentioned first.
+
+    A review with no opportunity_tag (not enriched, or enriched with nothing
+    actionable to name) is excluded - there's nothing to group it under.
+    """
+
+    grouped: dict[str, list[Review]] = {}
+    for review in reviews:
+        if review.opportunity_tag:
+            grouped.setdefault(review.opportunity_tag, []).append(review)
+
+    summaries = [
+        OpportunitySummary(
+            tag=tag,
+            count=len(tagged_reviews),
+            themes=sorted({theme for review in tagged_reviews for theme in review.themes}),
+            is_feature_request=any(review.is_feature_request for review in tagged_reviews),
+            sample_review=tagged_reviews[0],
+        )
+        for tag, tagged_reviews in grouped.items()
+    ]
+
+    return sorted(summaries, key=lambda summary: summary.count, reverse=True)
+
+
 def _negative_rate(summary: ThemeSummary) -> float:
     return summary.negative / summary.count if summary.count else 0.0
 
@@ -132,10 +192,22 @@ def assemble_report(project: Project, reviews_by_app: dict[str, list[Review]]) -
     """Build the full report dict the DAY 6 dashboard reads from."""
 
     all_reviews = [review for reviews in reviews_by_app.values() for review in reviews]
+    themes = summarize_themes(all_reviews)
+
+    # Partition every theme into exactly one of pain/strength/mixed, each
+    # still ranked most-mentioned first (classify_theme never changes order,
+    # only which bucket a theme lands in).
+    pain_themes = [t for t in themes if classify_theme(t) == "pain"]
+    strength_themes = [t for t in themes if classify_theme(t) == "strength"]
+    mixed_themes = [t for t in themes if classify_theme(t) == "mixed"]
 
     return {
         "sample_size": len(all_reviews),
         "bias_disclaimer": BIAS_DISCLAIMER,
-        "themes": summarize_themes(all_reviews),
+        "themes": themes,
+        "pain_themes": pain_themes,
+        "strength_themes": strength_themes,
+        "mixed_themes": mixed_themes,
+        "opportunities": summarize_opportunities(all_reviews),
         "competitive_comparison": compare_apps(project, reviews_by_app),
     }

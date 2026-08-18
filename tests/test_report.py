@@ -11,9 +11,13 @@ import pytest
 from motor.models import App, Project, Review
 from motor.pipeline.report import (
     NEGATIVE_SENTIMENT_GAP_THRESHOLD,
+    OpportunitySummary,
+    ThemeSummary,
     assemble_report,
+    classify_theme,
     compare_apps,
     reviews_for_theme,
+    summarize_opportunities,
     summarize_themes,
 )
 
@@ -235,3 +239,158 @@ class TestAssembleReport:
 
         assert report["sample_size"] == 0
         assert report["bias_disclaimer"]  # rule 5: never silently dropped, even with no data
+
+
+# ---------------------------------------------------------------------------
+# "As a PM, I want each theme labeled Pain/Strength/Mixed at a glance, so I
+# don't have to eyeball the positive/negative counts myself." Validated
+# against a real 36-review Hevy batch in the Product Opportunity Report
+# artifact before being promoted here (see docs/session-history.md).
+# ---------------------------------------------------------------------------
+class TestClassifyTheme:
+    def test_classifies_as_pain_when_negative_share_is_at_or_above_65_percent(self):
+        summary = ThemeSummary(theme="bugs", count=20, positive=5, negative=13, neutral=2)
+
+        assert classify_theme(summary) == "pain"
+
+    def test_classifies_as_strength_when_positive_share_is_at_or_above_65_percent(self):
+        summary = ThemeSummary(theme="ui", count=20, positive=13, negative=5, neutral=2)
+
+        assert classify_theme(summary) == "strength"
+
+    def test_classifies_as_mixed_when_neither_side_reaches_65_percent(self):
+        summary = ThemeSummary(theme="pricing", count=10, positive=5, negative=5, neutral=0)
+
+        assert classify_theme(summary) == "mixed"
+
+    def test_classifies_as_mixed_when_the_theme_has_zero_mentions(self):
+        # Guards the division by zero a naive negative/count check would hit.
+        summary = ThemeSummary(theme="untouched")
+
+        assert classify_theme(summary) == "mixed"
+
+
+# ---------------------------------------------------------------------------
+# "As a PM, I want distinct asks/fixes grouped and ranked by how many
+# reviews back them, so I have a shortlist to prioritize instead of 36
+# separate quotes."
+# ---------------------------------------------------------------------------
+class TestSummarizeOpportunities:
+    def test_orders_opportunities_by_review_count_descending(self, make_review):
+        reviews = [
+            make_review(dedup_id="1", themes=["sync"], opportunity_tag="fix-sync"),
+            make_review(dedup_id="2", themes=["sync"], opportunity_tag="fix-sync"),
+            make_review(dedup_id="3", themes=["ui"], opportunity_tag="add-dark-mode"),
+        ]
+
+        result = summarize_opportunities(reviews)
+
+        assert [o.tag for o in result] == ["fix-sync", "add-dark-mode"]
+        assert result[0].count == 2
+
+    def test_groups_multiple_reviews_under_the_same_opportunity_tag(self, make_review):
+        reviews = [make_review(dedup_id=str(i), opportunity_tag="fix-sync") for i in range(3)]
+        reviews.append(make_review(dedup_id="other", opportunity_tag="add-dark-mode"))
+
+        result = summarize_opportunities(reviews)
+
+        fix_sync = next(o for o in result if o.tag == "fix-sync")
+        assert fix_sync.count == 3
+
+    def test_collects_every_theme_from_reviews_carrying_the_tag(self, make_review):
+        reviews = [
+            make_review(dedup_id="1", opportunity_tag="fix-sync", themes=["sync", "bugs"]),
+            make_review(dedup_id="2", opportunity_tag="fix-sync", themes=["performance"]),
+        ]
+
+        [opportunity] = summarize_opportunities(reviews)
+
+        assert opportunity.themes == ["bugs", "performance", "sync"]
+
+    def test_flags_is_feature_request_true_if_any_carrying_review_is_a_feature_request(self, make_review):
+        reviews = [
+            make_review(dedup_id="1", opportunity_tag="add-widgets", is_feature_request=False),
+            make_review(dedup_id="2", opportunity_tag="add-widgets", is_feature_request=True),
+        ]
+
+        [opportunity] = summarize_opportunities(reviews)
+
+        assert opportunity.is_feature_request is True
+
+    def test_excludes_reviews_with_no_opportunity_tag(self, make_review):
+        reviews = [
+            make_review(dedup_id="1", opportunity_tag=None, themes=["sync"]),
+            make_review(dedup_id="2", opportunity_tag="fix-sync", themes=["sync"]),
+        ]
+
+        result = summarize_opportunities(reviews)
+
+        assert [o.tag for o in result] == ["fix-sync"]
+
+    def test_sample_review_is_a_genuine_review_object(self, make_review):
+        reviews = [make_review(dedup_id="1", opportunity_tag="fix-sync")]
+
+        [opportunity] = summarize_opportunities(reviews)
+
+        assert isinstance(opportunity.sample_review, Review)
+        assert opportunity.sample_review.author_hash
+
+
+# ---------------------------------------------------------------------------
+# The full report, with the Pain/Strength/Mixed breakdown and opportunity
+# backlog folded in alongside the existing theme summary + competitive
+# comparison.
+# ---------------------------------------------------------------------------
+class TestAssembleReportOpportunitySections:
+    def _solo_project(self):
+        return Project(name="Solo project", apps=[App(app_id="a", platform="google_play", country="br", role="primary")])
+
+    def test_includes_pain_strength_and_mixed_theme_lists(self, make_review):
+        reviews_by_app = {
+            "a": [
+                make_review(dedup_id="p1", app_id="a", themes=["crashes"], sentiment="negative"),
+                make_review(dedup_id="p2", app_id="a", themes=["crashes"], sentiment="negative"),
+                make_review(dedup_id="s1", app_id="a", themes=["ui"], sentiment="positive"),
+                make_review(dedup_id="s2", app_id="a", themes=["ui"], sentiment="positive"),
+                make_review(dedup_id="m1", app_id="a", themes=["pricing"], sentiment="positive"),
+                make_review(dedup_id="m2", app_id="a", themes=["pricing"], sentiment="negative"),
+            ]
+        }
+
+        report = assemble_report(self._solo_project(), reviews_by_app)
+
+        assert [t.theme for t in report["pain_themes"]] == ["crashes"]
+        assert [t.theme for t in report["strength_themes"]] == ["ui"]
+        assert [t.theme for t in report["mixed_themes"]] == ["pricing"]
+
+    def test_includes_opportunities_list(self, make_review):
+        reviews_by_app = {
+            "a": [make_review(dedup_id="1", app_id="a", themes=["crashes"], sentiment="negative", opportunity_tag="fix-crash")]
+        }
+
+        report = assemble_report(self._solo_project(), reviews_by_app)
+
+        assert [o.tag for o in report["opportunities"]] == ["fix-crash"]
+
+    def test_pain_and_strength_and_mixed_partition_all_themes_with_no_overlap(self, make_review):
+        reviews_by_app = {
+            "a": [
+                make_review(dedup_id="p1", app_id="a", themes=["crashes"], sentiment="negative"),
+                make_review(dedup_id="p2", app_id="a", themes=["crashes"], sentiment="negative"),
+                make_review(dedup_id="s1", app_id="a", themes=["ui"], sentiment="positive"),
+                make_review(dedup_id="s2", app_id="a", themes=["ui"], sentiment="positive"),
+                make_review(dedup_id="m1", app_id="a", themes=["pricing"], sentiment="positive"),
+                make_review(dedup_id="m2", app_id="a", themes=["pricing"], sentiment="negative"),
+            ]
+        }
+
+        report = assemble_report(self._solo_project(), reviews_by_app)
+
+        pain = {t.theme for t in report["pain_themes"]}
+        strength = {t.theme for t in report["strength_themes"]}
+        mixed = {t.theme for t in report["mixed_themes"]}
+
+        assert pain | strength | mixed == {"crashes", "ui", "pricing"}
+        assert pain.isdisjoint(strength)
+        assert pain.isdisjoint(mixed)
+        assert strength.isdisjoint(mixed)

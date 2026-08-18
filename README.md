@@ -133,6 +133,19 @@ them.
 > takes a human moment). Either way, the same analyst — Claude — does the
 > actual reading, and everything downstream treats the result identically.
 
+### Bounded pool, then a genuine random subsample
+Google Play doesn't let anyone pull "a truly random review from all time" —
+only the most recent, most relevant, or by star rating, a page at a time. So
+this project fetches a bounded pool of recent reviews first, then randomly
+picks which of *those* actually get analyzed — and can optionally narrow
+that pool to specific star ratings (e.g. only 1–2★, to focus on complaints).
+
+> **In plain terms:** think of it like pulling the last 300 comment cards
+> left at a restaurant, then drawing 100 of them out of a hat rather than
+> just reading the top 100. It's honestly random within that batch — it's
+> just not a random draw from *every* comment card the restaurant has ever
+> received, and every report says so plainly instead of pretending otherwise.
+
 ---
 
 ## 5. Tech stack — what each piece is for

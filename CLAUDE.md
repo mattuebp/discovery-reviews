@@ -46,6 +46,23 @@ system is designed to work for **any app**.
 - **Platform-neutral canonical schema.** Every adapter returns the same
   review record. That's what allows combining Google + App Store data in the
   future.
+- **Bounded pool + random subsample + optional rating filter.** Google Play
+  exposes no random-access review API — only sort-by-recent/relevant/rating
+  (confirmed by reading the installed `google_play_scraper` library's
+  source). So collection fetches one bounded pool (`count`, default 300),
+  then `motor/pipeline/selection.py`'s `random_sample()` and
+  `filter_by_rating()` narrow it down — genuinely random *within* that
+  pool. The resulting recency bias is never hidden: it's always disclosed
+  via `BIAS_DISCLAIMER` in every report, per rule 5.
+- **Manual labeling is the default enrichment path, not automatic API
+  calls.** Avoids a second, separately metered Anthropic bill stacked on an
+  existing Claude subscription. Investigated first, not assumed: the Claude
+  Agent SDK requires a metered key regardless of a subscription; headless
+  `claude -p` *does* run under the subscription, but was deliberately not
+  wired into the product itself — exactly the kind of workaround the
+  subscription-vs-metered-API line exists to prevent. `enrich()` (the paid
+  API path) is kept, not removed, for when DAY 5+ needs unattended/scheduled
+  runs.
 
 ---
 

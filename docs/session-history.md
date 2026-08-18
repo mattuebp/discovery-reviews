@@ -12,32 +12,61 @@
 
 # Session History
 
-## In progress — not yet committed (as of 2026-08-08)
+## In progress — not yet committed (as of 2026-08-09)
 
-**Product Opportunity Report: pattern drafted, dashboard not yet built.**
-Matheus asked for a reusable "prompt pattern" for turning a batch of
-enriched reviews into a visual HTML dashboard (ranked pain points by
-volume, drill-down into real quotes, charts/tables), to be validated by
-him, then folded into `how-to-test.md` / `CLAUDE.md` / `README.md`, and
-finally turned into a Skill so every future report follows it automatically.
+**Product Opportunity Report: pattern validated by Matheus, now being
+promoted into tested `motor/` code.** Picking up from the entry below (the
+prior machine's labeled batch was never committed - it lived only in the
+gitignored `scripts/output/`, so nothing was lost from git's point of view,
+but the actual data had to be redone on this machine).
 
-Status right now:
-- A draft pattern doc was written (theme aggregation → Pain/Strength/Mixed
-  classification → group by `opportunity_tag` → rank by volume → fixed
-  HTML section order) - **not yet shown to or approved by Matheus.**
-- A fresh, real 100-review batch was collected and hand-labeled for Hevy
-  (`scripts/output/reviews_raw.json` + `labels.json`).
-- A one-off script to compute the dashboard's data (theme + opportunity
-  aggregation) was written but not finished running.
-- **The actual HTML dashboard has not been built yet.** Nothing here is
-  committed. Nothing has touched `how-to-test.md`, `CLAUDE.md`, `README.md`,
-  or `.claude/skills/` for this feature yet - that's all still pending
-  pattern approval, per Matheus's explicit sequencing request.
+What happened this session:
+- Ran `scripts/1_collect_and_export.py` fresh against real `com.hevy`
+  reviews (US storefront): pool of 300, filtered to 1-4*, randomly sampled
+  to 38.
+- Hand-labeled all 38 through this Claude Code conversation (the
+  established manual-labeling path) - 36 of 38 had an extractable theme;
+  "good" and "great" were too short/generic to tag, so they kept a
+  sentiment but no theme. Two opportunity tags that described the same
+  underlying ask with different wording (`raise-free-tier-custom-exercise-cap`
+  vs `expand-free-tier-custom-exercises`, and the two "saved workout limit"
+  variants) were normalized to one tag each before computing the report -
+  otherwise the volume ranking would have silently undercounted them.
+- Computed the theme/opportunity aggregation with a scratchpad script
+  (not committed - see Part B below for where this logic is landing for
+  real), then built and published an HTML dashboard implementing the
+  drafted pattern: KPI strip -> sentiment composition -> bias disclosure ->
+  Pain themes -> Strengths -> Growth Signals (mixed sentiment) ->
+  feature-request backlog -> full opportunities appendix -> the pattern
+  named explicitly as steps, for later Skill-ification. Marked visibly as
+  a draft pending approval.
+- Matheus reviewed it, asked how many reviews were used (answered: 38
+  sampled / 36 analyzed), then asked for that sample-size context to be
+  visible in the report itself (not just the meta row) - added as a
+  caption on the "Reviews analyzed" KPI tile, redeployed to the same
+  artifact URL.
+- Matheus then approved moving forward and asked for two other
+  already-made-but-undocumented product decisions to be written down
+  properly, with their motivation: the rating-filter/sample-size
+  configurability (`motor/pipeline/selection.py`), and the decision to make
+  manual labeling the default enrichment path instead of automatic
+  Anthropic API calls. See the `CLAUDE.md`/`README.md` entries this same
+  session for that.
 
-**Next step when resuming:** finish computing the report data, build the
-HTML dashboard from the real Hevy batch already labeled, present both the
-pattern and the dashboard together for validation, then proceed to the
-doc updates + skill only after approval.
+**What's landing in this commit:** the two architecture decisions above,
+registered in `CLAUDE.md` (Architecture decisions) and `README.md` (§4),
+plus `classify_theme()`/`OpportunitySummary`/`summarize_opportunities()`
+added to `motor/pipeline/report.py` and wired into `assemble_report()` -
+the tested version of the pattern validated in the artifact above. Full
+TDD cycle: tests written and approved (via plan-mode sign-off, since the
+test list was presented as part of the plan) before implementation.
+
+**Still not done:** the actual HTML dashboard template (`dashboard/`) is
+DAY 6 scope, deliberately not built here. `how-to-test.md` doesn't yet
+document the opportunity-report pattern for a non-technical reader, and no
+Skill exists yet - both still pending, same sequencing Matheus set
+earlier: doc/skill work comes after the pattern is proven in tested code,
+not before.
 
 ---
 
