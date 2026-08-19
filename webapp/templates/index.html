@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Discovery Reviews</title>
+<!-- Google Fonts: this page is served locally by our own Flask app, not
+     published as a sandboxed Artifact, so a normal font link works fine
+     here (no CSP restriction to work around). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ===== Visual identity: matches the rest of the project (dark theme,
+     gold accent #FFC000, Bebas Neue display + Barlow body) - see CLAUDE.md
+     "Stack" section. ===== */
+  :root {
+    --bg: #14110D;
+    --bg-elevated: #1E1912;
+    --bg-elevated-2: #262015;
+    --border: rgba(243,237,225,0.10);
+    --ink: #F3EDE1;
+    --ink-secondary: #B8AD98;
+    --ink-muted: #83795F;
+    --accent: #FFC000;
+    --accent-ink-on: #14110D;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink-secondary);
+    font-family: 'Barlow', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 3rem 1.25rem;
+  }
+  .card {
+    width: 100%;
+    max-width: 560px;
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+  }
+  h1 {
+    font-family: 'Bebas Neue', system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+    font-size: 2.6rem;
+    margin: 0;
+    line-height: 1;
+  }
+  p.lede { margin: 0; font-size: 0.95rem; color: var(--ink-secondary); }
+  label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.5rem;
+  }
+  .search-wrap { position: relative; }
+  input[type="text"], input[type="number"] {
+    width: 100%;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: 'Barlow', sans-serif;
+    font-size: 1rem;
+    padding: 0.75rem 0.9rem;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  #dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0; right: 0;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    max-height: 320px;
+    overflow-y: auto;
+    z-index: 10;
+    display: none;
+  }
+  #dropdown.open { display: block; }
+  .result {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.6rem 0.8rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+  }
+  .result:last-child { border-bottom: none; }
+  .result:hover, .result.active { background: var(--bg-elevated-2); }
+  .result img { width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0; }
+  .result .title { color: var(--ink); font-weight: 600; font-size: 0.92rem; }
+  .result .dev { color: var(--ink-muted); font-size: 0.78rem; }
+  #selected-chip {
+    display: none;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--bg-elevated-2);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 0.6rem 0.8rem;
+    margin-top: 0.6rem;
+  }
+  #selected-chip.shown { display: flex; }
+  #selected-chip img { width: 28px; height: 28px; border-radius: 6px; }
+  #selected-chip .title { color: var(--ink); font-weight: 600; font-size: 0.9rem; }
+  .stars { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+  .star-option {
+    display: flex; align-items: center; gap: 0.4rem;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+    font-size: 0.85rem;
+    color: var(--ink-secondary);
+    cursor: pointer;
+  }
+  .star-option input { accent-color: var(--accent); }
+  button {
+    background: var(--accent);
+    color: var(--accent-ink-on);
+    border: none;
+    border-radius: 8px;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    padding: 0.85rem 1rem;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  #status { font-size: 0.85rem; color: var(--ink-muted); min-height: 1.2em; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div>
+    <h1>Discovery Reviews</h1>
+    <p class="lede">Search for an app, pick which star ratings to include, and download the file for labeling.</p>
+  </div>
+
+  <div>
+    <label for="search">App</label>
+    <div class="search-wrap">
+      <input type="text" id="search" placeholder="Type an app name..." autocomplete="off">
+      <div id="dropdown"></div>
+    </div>
+    <div id="selected-chip">
+      <img id="selected-icon" src="" alt="">
+      <span class="title" id="selected-title"></span>
+    </div>
+  </div>
+
+  <div>
+    <label>Country / storefront</label>
+    <input type="text" id="country" value="us" style="max-width: 120px;">
+  </div>
+
+  <div>
+    <label>Star ratings to include</label>
+    <div class="stars">
+      <label class="star-option"><input type="checkbox" value="1" checked> 1★</label>
+      <label class="star-option"><input type="checkbox" value="2" checked> 2★</label>
+      <label class="star-option"><input type="checkbox" value="3" checked> 3★</label>
+      <label class="star-option"><input type="checkbox" value="4" checked> 4★</label>
+      <label class="star-option"><input type="checkbox" value="5" checked> 5★</label>
+    </div>
+  </div>
+
+  <div>
+    <label for="sample-size">How many reviews to analyze</label>
+    <input type="number" id="sample-size" value="100" min="1" max="300" style="max-width: 120px;">
+  </div>
+
+  <button id="collect-btn" disabled>Collect &amp; Export</button>
+  <div id="status"></div>
+</div>
+
+<script>
+const searchInput = document.getElementById('search');
+const dropdown = document.getElementById('dropdown');
+const selectedChip = document.getElementById('selected-chip');
+const selectedIcon = document.getElementById('selected-icon');
+const selectedTitle = document.getElementById('selected-title');
+const countryInput = document.getElementById('country');
+const collectBtn = document.getElementById('collect-btn');
+const statusEl = document.getElementById('status');
+
+let selectedAppId = null;
+let debounceTimer = null;
+
+// Live-typing search: wait for a short pause in typing before calling the
+// server, so we're not firing a request on every single keystroke.
+searchInput.addEventListener('input', () => {
+  selectedAppId = null;
+  collectBtn.disabled = true;
+  selectedChip.classList.remove('shown');
+
+  clearTimeout(debounceTimer);
+  const query = searchInput.value.trim();
+  if (!query) {
+    dropdown.classList.remove('open');
+    return;
+  }
+  debounceTimer = setTimeout(() => runSearch(query), 300);
+});
+
+async function runSearch(query) {
+  const country = countryInput.value.trim() || 'us';
+  const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&country=${encodeURIComponent(country)}`);
+  const results = await response.json();
+  renderDropdown(results);
+}
+
+function renderDropdown(results) {
+  dropdown.innerHTML = '';
+  if (results.length === 0) {
+    dropdown.classList.remove('open');
+    return;
+  }
+  for (const app of results) {
+    const row = document.createElement('div');
+    row.className = 'result';
+    row.innerHTML = `
+      ${app.icon_url ? `<img src="${app.icon_url}" alt="">` : ''}
+      <div>
+        <div class="title">${escapeHtml(app.title)}</div>
+        <div class="dev">${escapeHtml(app.developer)}</div>
+      </div>
+    `;
+    row.addEventListener('click', () => selectApp(app));
+    dropdown.appendChild(row);
+  }
+  dropdown.classList.add('open');
+}
+
+function selectApp(app) {
+  selectedAppId = app.app_id;
+  searchInput.value = app.title;
+  dropdown.classList.remove('open');
+  selectedIcon.src = app.icon_url || '';
+  selectedTitle.textContent = `${app.title} (${app.app_id})`;
+  selectedChip.classList.add('shown');
+  collectBtn.disabled = false;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text || '';
+  return div.innerHTML;
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.search-wrap')) dropdown.classList.remove('open');
+});
+
+collectBtn.addEventListener('click', async () => {
+  if (!selectedAppId) return;
+
+  const ratings = Array.from(document.querySelectorAll('.stars input:checked')).map(el => parseInt(el.value, 10));
+  const sampleSize = parseInt(document.getElementById('sample-size').value, 10) || 100;
+  const country = countryInput.value.trim() || 'us';
+
+  collectBtn.disabled = true;
+  statusEl.textContent = 'Collecting reviews from Google Play...';
+
+  try {
+    const response = await fetch('/api/collect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        app_id: selectedAppId,
+        country: country,
+        ratings: ratings.length === 5 ? null : ratings,  // all 5 checked = no filter
+        sample_size: sampleSize,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'reviews_for_labeling.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    statusEl.textContent = 'Done! Downloaded reviews_for_labeling.json - see docs/how-to-test.md, Part C.';
+  } catch (err) {
+    statusEl.textContent = `Something went wrong: ${err.message}`;
+  } finally {
+    collectBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

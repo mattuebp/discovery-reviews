@@ -11,6 +11,7 @@ dependencies = [
     "google-play-scraper>=1.2.7", # fetches public reviews from the Google Play store page
     "anthropic>=0.40.0",          # Claude API client, used by the `enrich` pipeline stage
     "python-dotenv>=1.0.1",       # loads secrets (like ANTHROPIC_API_KEY) from a local .env file
+    "flask>=3.1.0",                # the local web app (webapp/) - app search bar + collect/export button
 ]
 
 [project.optional-dependencies]

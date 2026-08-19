@@ -38,6 +38,33 @@ folder window instead, and look for "Open in Terminal" in the menu.)*
 
 ## Part B — Pull real reviews
 
+**Recommended: the search interface.** No more looking up an app's
+Google Play package id by hand.
+
+1. In the terminal, type exactly this and press **Enter**:
+   ```
+   .venv\Scripts\python.exe webapp\app.py
+   ```
+2. You'll see `Discovery Reviews is running at http://127.0.0.1:5000` -
+   open that address in your browser.
+3. Type an app's name in the search box; click the one you mean from the
+   dropdown that appears (this is also where you can pick a different
+   `Country / storefront`, e.g. `br`).
+4. Tick which star ratings to include (all five are checked by default -
+   that means no filter, every rating), and set **how many reviews to
+   analyze**.
+5. Click **Collect & Export**. Your browser downloads
+   `reviews_for_labeling.json` - move it into
+   `C:\discovery-reviews\scripts\output\` (overwrite the old one if
+   there's already one there).
+6. Leave the terminal window open (or press Ctrl+C to stop the web app
+   once you have your file) - you'll come back to the *terminal* in
+   Part D, not the browser.
+
+### Or: the terminal script (same result, no browser)
+
+If you'd rather not use the browser, this does the exact same thing:
+
 1. In the terminal, type exactly this and press **Enter**:
    ```
    .venv\Scripts\python.exe scripts\1_collect_and_export.py
@@ -52,10 +79,9 @@ folder window instead, and look for "Open in Terminal" in the menu.)*
    ```
 3. Leave that terminal window open - you'll come back to it in Part D.
 
-### Changing what gets collected
-
-Open `scripts\1_collect_and_export.py` with Notepad and edit the constants
-near the top, then save and re-run the command above:
+To change what gets collected this way, open `scripts\1_collect_and_export.py`
+with Notepad and edit the constants near the top, then save and re-run the
+command above:
 
 | Constant | What it controls | Example |
 |---|---|---|
@@ -69,7 +95,8 @@ near the top, then save and re-run the command above:
 `POOL_SIZE` reviews get fetched (the most recent ones, in one single
 request), then `SAMPLE_SIZE` of those get **randomly** picked for actual
 analysis - see the "Why random sampling, not just 'most recent'" section
-below.
+below. (The web app always uses a `POOL_SIZE` of 300 - only `SAMPLE_SIZE`
+and the rating filter are exposed there, to keep the page simple.)
 
 ---
 
@@ -155,6 +182,6 @@ represents every user who has ever used the app.
 
 ---
 
-*This document should stay in sync with `scripts/1_collect_and_export.py`
-and `scripts/3_apply_labels_and_report.py`. If those scripts change,
-update this file in the same session.*
+*This document should stay in sync with `webapp/app.py`,
+`scripts/1_collect_and_export.py`, and `scripts/3_apply_labels_and_report.py`.
+If those change, update this file in the same session.*

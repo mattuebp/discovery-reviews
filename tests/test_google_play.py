@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 import motor.sources.google_play as google_play_module
 from motor.sources.base import ReviewSource
-from motor.sources.google_play import GooglePlaySource
+from motor.sources.google_play import AppSearchResult, GooglePlaySource, search_apps
 
 
 def test_google_play_source_satisfies_the_review_source_contract():
@@ -76,3 +76,95 @@ def test_collect_accepts_a_custom_pool_size(monkeypatch):
     list(GooglePlaySource().collect(app_id="com.hevy.app", country="br", count=250))
 
     assert fake_fetch.call_args.kwargs.get("count") == 250
+
+
+# ---------------------------------------------------------------------------
+# search_apps() - lets a PM type an app's name instead of having to already
+# know its Google Play package id. Verified live against real search
+# results before being built here (see docs/session-history.md): the
+# underlying library loses the app id specifically for Google's "exact
+# match" top card, which is usually the exact app someone searched for.
+# ---------------------------------------------------------------------------
+def test_search_apps_calls_the_underlying_library_with_query_and_country(monkeypatch):
+    fake_search = MagicMock(return_value=[])
+    monkeypatch.setattr(google_play_module, "_search_apps_raw", fake_search)
+
+    search_apps("hevy", country="br")
+
+    fake_search.assert_called_once()
+    call_args, call_kwargs = fake_search.call_args
+    assert call_args[0] == "hevy"
+    assert call_kwargs["country"] == "br"
+
+
+def test_search_apps_maps_fields_into_appsearchresult_objects(monkeypatch):
+    raw_results = [
+        {"appId": "com.hevy", "title": "Hevy", "developer": "Hevy Inc", "icon": "http://icon", "score": 4.9},
+    ]
+    monkeypatch.setattr(google_play_module, "_search_apps_raw", MagicMock(return_value=raw_results))
+
+    [result] = search_apps("hevy")
+
+    assert result == AppSearchResult(
+        app_id="com.hevy", title="Hevy", developer="Hevy Inc", icon_url="http://icon", score=4.9
+    )
+
+
+def test_search_apps_recovers_a_missing_top_result_app_id(monkeypatch):
+    # The library's real, verified bug: the top result's appId comes back
+    # None even though the app genuinely exists and every other field
+    # (title, developer, ...) is correct.
+    raw_results = [{"appId": None, "title": "Hevy", "developer": "Hevy Inc", "icon": None, "score": 4.9}]
+    monkeypatch.setattr(google_play_module, "_search_apps_raw", MagicMock(return_value=raw_results))
+    monkeypatch.setattr(google_play_module, "_recover_top_result_app_id", MagicMock(return_value="com.hevy"))
+
+    [result] = search_apps("hevy")
+
+    assert result.app_id == "com.hevy"
+
+
+def test_search_apps_drops_a_result_when_the_id_cannot_be_recovered(monkeypatch):
+    raw_results = [{"appId": None, "title": "Ghost App", "developer": "?", "icon": None, "score": None}]
+    monkeypatch.setattr(google_play_module, "_search_apps_raw", MagicMock(return_value=raw_results))
+    monkeypatch.setattr(google_play_module, "_recover_top_result_app_id", MagicMock(return_value=None))
+
+    result = search_apps("ghost")
+
+    # An entry with no usable id would be a dead end in the UI (unclickable),
+    # so it's excluded rather than passed through broken.
+    assert result == []
+
+
+def test_search_apps_passes_limit_through_as_n_hits(monkeypatch):
+    fake_search = MagicMock(return_value=[])
+    monkeypatch.setattr(google_play_module, "_search_apps_raw", fake_search)
+
+    search_apps("hevy", limit=5)
+
+    assert fake_search.call_args.kwargs.get("n_hits") == 5
+
+
+def test_search_apps_returns_empty_list_when_the_library_returns_no_matches(monkeypatch):
+    monkeypatch.setattr(google_play_module, "_search_apps_raw", MagicMock(return_value=[]))
+
+    assert search_apps("xyzzynonexistentapp123") == []
+
+
+def test_recover_top_result_app_id_extracts_the_first_details_link(monkeypatch):
+    fake_html = """
+    <html><body>
+      <a href="/store/apps/details?id=com.hevy&hl=en">Hevy</a>
+      <a href="/store/apps/details?id=com.hevycoach.app&hl=en">Hevy Coach</a>
+    </body></html>
+    """
+    monkeypatch.setattr(google_play_module, "_fetch_search_page", MagicMock(return_value=fake_html))
+
+    app_id = google_play_module._recover_top_result_app_id("hevy", "us")
+
+    assert app_id == "com.hevy"
+
+
+def test_recover_top_result_app_id_returns_none_when_no_link_is_found(monkeypatch):
+    monkeypatch.setattr(google_play_module, "_fetch_search_page", MagicMock(return_value="<html></html>"))
+
+    assert google_play_module._recover_top_result_app_id("nothing", "us") is None

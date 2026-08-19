@@ -14,63 +14,60 @@
 
 ## In progress — not yet committed (as of 2026-08-09)
 
-**Product Opportunity Report: pattern validated by Matheus, now being
-promoted into tested `motor/` code.** Picking up from the entry below (the
-prior machine's labeled batch was never committed - it lived only in the
-gitignored `scripts/output/`, so nothing was lost from git's point of view,
-but the actual data had to be redone on this machine).
+**App search + collect interface, plus a "explain reasoning live" rule.**
+Matheus, testing the tool by hand, had to look up an app's Google Play
+package id manually before he could use it. He asked for a real interface:
+type a name, see live suggestions, click to pick one, filter by star
+rating, download the file the manual-labeling workflow needs next.
 
-What happened this session:
-- Ran `scripts/1_collect_and_export.py` fresh against real `com.hevy`
-  reviews (US storefront): pool of 300, filtered to 1-4*, randomly sampled
-  to 38.
-- Hand-labeled all 38 through this Claude Code conversation (the
-  established manual-labeling path) - 36 of 38 had an extractable theme;
-  "good" and "great" were too short/generic to tag, so they kept a
-  sentiment but no theme. Two opportunity tags that described the same
-  underlying ask with different wording (`raise-free-tier-custom-exercise-cap`
-  vs `expand-free-tier-custom-exercises`, and the two "saved workout limit"
-  variants) were normalized to one tag each before computing the report -
-  otherwise the volume ranking would have silently undercounted them.
-- Computed the theme/opportunity aggregation with a scratchpad script
-  (not committed - see Part B below for where this logic is landing for
-  real), then built and published an HTML dashboard implementing the
-  drafted pattern: KPI strip -> sentiment composition -> bias disclosure ->
-  Pain themes -> Strengths -> Growth Signals (mixed sentiment) ->
-  feature-request backlog -> full opportunities appendix -> the pattern
-  named explicitly as steps, for later Skill-ification. Marked visibly as
-  a draft pending approval.
-- Matheus reviewed it, asked how many reviews were used (answered: 38
-  sampled / 36 analyzed), then asked for that sample-size context to be
-  visible in the report itself (not just the meta row) - added as a
-  caption on the "Reviews analyzed" KPI tile, redeployed to the same
-  artifact URL.
-- Matheus then approved moving forward and asked for two other
-  already-made-but-undocumented product decisions to be written down
-  properly, with their motivation: the rating-filter/sample-size
-  configurability (`motor/pipeline/selection.py`), and the decision to make
-  manual labeling the default enrichment path instead of automatic
-  Anthropic API calls. See the `CLAUDE.md`/`README.md` entries this same
-  session for that.
+- Investigated `google_play_scraper.search()` before building anything on
+  top of it, and found a genuine bug: it loses the app id specifically for
+  Google's "exact match" top result card - verified live against 4 real
+  queries (Hevy, Strava, MyFitnessPal, Notion). That top card is usually
+  the exact app someone typed, so this would have broken the single most
+  common search. Root cause and fix, both verified live: the card's ID
+  lives at a different spot than the library reads; re-fetching the same
+  search page as plain HTML and taking the first
+  `store/apps/details?id=...` link on it reliably recovers the real id,
+  without depending on the library's (broken) internal JSON indices.
+  Landed in `motor/sources/google_play.py` as `search_apps()` +
+  `_recover_top_result_app_id()`, full TDD cycle, 8 new tests.
+- Built `webapp/` - the project's first running interface (a small local
+  Flask app), presented as a genuine architecture choice against a
+  terminal-picker alternative before building either. Routes are thin
+  wrappers over already-tested `motor/` functions (same convention as
+  `scripts/`), writing to the exact same `scripts/output/` paths so the
+  existing Part C/D manual-labeling flow keeps working unchanged
+  regardless of which front door collected the reviews. Smoke-tested live
+  end to end (search + collect) against real Google Play data, not just
+  mocks.
+- Also added a new standing rule (`CLAUDE.md` rule 6): explain the
+  reasoning and impact of every suggestion/action, in plain language, live
+  in the conversation - not only in written docs. Matheus's own framing:
+  this project is a learning vehicle for him as much as it's software.
 
-**What's landing in this commit:** the two architecture decisions above,
-registered in `CLAUDE.md` (Architecture decisions) and `README.md` (§4),
-plus `classify_theme()`/`OpportunitySummary`/`summarize_opportunities()`
-added to `motor/pipeline/report.py` and wired into `assemble_report()` -
-the tested version of the pattern validated in the artifact above. Full
-TDD cycle: tests written and approved (via plan-mode sign-off, since the
-test list was presented as part of the plan) before implementation.
-
-**Still not done:** the actual HTML dashboard template (`dashboard/`) is
-DAY 6 scope, deliberately not built here. `how-to-test.md` doesn't yet
-document the opportunity-report pattern for a non-technical reader, and no
-Skill exists yet - both still pending, same sequencing Matheus set
-earlier: doc/skill work comes after the pattern is proven in tested code,
-not before.
+`docs/how-to-test.md` Part B now recommends the web app, keeping the
+terminal-script instructions as the manual fallback. `CLAUDE.md`'s folder
+tree updated to include `webapp/`.
 
 ---
 
 ## Commit log
+
+### `75f11ee` — Document sampling/enrichment decisions, promote Opportunity Report pattern (2026-08-09)
+Registered two already-made-but-undocumented architecture decisions with
+their motivation, in the two places meant to be the living reference (not
+just this log): `CLAUDE.md`'s Architecture decisions section and
+`README.md` §4. Promoted the Product Opportunity Report pattern -
+validated against a real 36-review Hevy batch and approved via a
+published artifact - from a one-off scratchpad script into tested
+`motor/pipeline/report.py` code: `classify_theme()` (Pain/Strength/Mixed),
+`OpportunitySummary`, `summarize_opportunities()`, wired into
+`assemble_report()`. Full TDD cycle, 13 new tests, 79/79 passing.
+Spot-checked the promoted logic against the artifact's real numbers
+(bug-reports -> pain, fix-health-connect-sync as top opportunity) to
+confirm it reproduces what Matheus already reviewed. The actual HTML
+dashboard template stays out of scope (DAY 6).
 
 ### `a8a322c` — Add docs/how-to-test.md (2026-08-08)
 Wrote the standing, non-technical Parts A→B→C→D walkthrough for the

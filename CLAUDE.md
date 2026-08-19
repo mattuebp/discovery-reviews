@@ -30,6 +30,19 @@ system is designed to work for **any app**.
    `.env` (never committed). See `docs/governanca.md`.
 5. **Methodological honesty.** Never fabricate metrics. The review sample is
    biased; code and reports must make that explicit.
+6. **Explain the reasoning and impact of every suggestion or action, in
+   plain language.** This project is a learning vehicle for Matheus (a
+   non-technical/business background) as much as it's software. Whenever
+   Claude Code proposes or does something — an architecture choice, a
+   library, a code change, a command — it must say *why*, and what the
+   *impact* is, in language a business reader can follow and learn from,
+   not just approve. A one-line "because X, so Y" is enough for a small
+   step; a real architecture decision gets the same plain-language
+   treatment already used throughout `README.md` ("In plain terms: ...").
+   This is about the live conversation, not just written docs — the
+   "Architecture decisions" section below and `README.md` §4 are where
+   that reasoning gets permanently recorded once a decision is made, but
+   the explanation has to happen in the moment too, not only in hindsight.
 
 ---
 
@@ -181,7 +194,11 @@ discovery-reviews/
 │   ├── 1_collect_and_export.py       # collect -> normalize -> filter/sample -> export
 │   ├── 3_apply_labels_and_report.py  # apply_labels -> print theme/opportunity report
 │   └── output/              # gitignored - collected data never goes into git
-├── dashboard/              # self-contained HTML (DAY 6 output)
+├── webapp/                 # the project's one running interface (search + collect)
+│   ├── app.py               # thin Flask routes, same "no logic of its own" rule as scripts/
+│   └── templates/
+│       └── index.html       # search bar, star filter, sample size, download button
+├── dashboard/              # self-contained HTML (DAY 6 output - a different, later interface)
 │   └── template.html
 ├── contrato/               # shared schemas
 │   └── review.schema.json
