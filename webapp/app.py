@@ -61,12 +61,23 @@ def api_collect():
     sample_size = int(body.get("sample_size", 100))
 
     source = GooglePlaySource()
-    raw_reviews = list(source.collect(app_id=app_id, country=country, count=POOL_SIZE))
+    if ratings:
+        # Each selected rating gets its own targeted pool (see
+        # collect_by_ratings' docstring) instead of one mixed newest-pool
+        # that starves out whichever ratings are less common recently.
+        raw_reviews = list(
+            source.collect_by_ratings(app_id=app_id, country=country, ratings=ratings, count_per_rating=POOL_SIZE)
+        )
+    else:
+        raw_reviews = list(source.collect(app_id=app_id, country=country, count=POOL_SIZE))
+
     reviews = deduplicate(
         [normalize(r, platform="google_play", app_id=app_id, country=country) for r in raw_reviews]
     )
 
     if ratings:
+        # Defensive check, not the primary mechanism anymore - each fetch
+        # above already asked Google Play to pre-filter by exact rating.
         reviews = filter_by_rating(reviews, ratings)
 
     reviews = random_sample(reviews, sample_size)

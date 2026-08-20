@@ -14,45 +14,54 @@
 
 ## In progress — not yet committed (as of 2026-08-09)
 
-**App search + collect interface, plus a "explain reasoning live" rule.**
-Matheus, testing the tool by hand, had to look up an app's Google Play
-package id manually before he could use it. He asked for a real interface:
-type a name, see live suggestions, click to pick one, filter by star
-rating, download the file the manual-labeling workflow needs next.
+**Fixed a real analysis-integrity bug: rating filters were starving on
+recency bias.** Matheus tested the web app, filtered to 1-3 star reviews
+with a sample size of 500, and got only 14 back. Walked through the actual
+mechanism with him live (not just "it's a known limitation"): `collect()`
+always fetched one pool of the 300 *newest* reviews of any rating, then
+filtered afterward - so if an app's recent reviews skew positive (Hevy's
+newest 300 were 256 five-star), a low-star filter is fighting a pool that
+was never built for it.
 
-- Investigated `google_play_scraper.search()` before building anything on
-  top of it, and found a genuine bug: it loses the app id specifically for
-  Google's "exact match" top result card - verified live against 4 real
-  queries (Hevy, Strava, MyFitnessPal, Notion). That top card is usually
-  the exact app someone typed, so this would have broken the single most
-  common search. Root cause and fix, both verified live: the card's ID
-  lives at a different spot than the library reads; re-fetching the same
-  search page as plain HTML and taking the first
-  `store/apps/details?id=...` link on it reliably recovers the real id,
-  without depending on the library's (broken) internal JSON indices.
-  Landed in `motor/sources/google_play.py` as `search_apps()` +
-  `_recover_top_result_app_id()`, full TDD cycle, 8 new tests.
-- Built `webapp/` - the project's first running interface (a small local
-  Flask app), presented as a genuine architecture choice against a
-  terminal-picker alternative before building either. Routes are thin
-  wrappers over already-tested `motor/` functions (same convention as
-  `scripts/`), writing to the exact same `scripts/output/` paths so the
-  existing Part C/D manual-labeling flow keeps working unchanged
-  regardless of which front door collected the reviews. Smoke-tested live
-  end to end (search + collect) against real Google Play data, not just
-  mocks.
-- Also added a new standing rule (`CLAUDE.md` rule 6): explain the
-  reasoning and impact of every suggestion/action, in plain language, live
-  in the conversation - not only in written docs. Matheus's own framing:
-  this project is a learning vehicle for him as much as it's software.
+Investigated before proposing a fix: confirmed live that Google Play
+supports server-side exact-rating filtering (`filter_score_with`) -
+requesting 100 one-star Hevy reviews returned 100 genuine ones spanning
+January to August, not a handful. Built `GooglePlaySource.collect_by_ratings()`
+- when specific ratings are selected, each one is fetched as its own
+targeted pool instead of sharing one mixed pool; with no rating filter
+(all 5 checked), the single mixed pool stays, since the natural rating
+proportion is itself real signal. Full TDD cycle, 6 new tests. Wired into
+both `webapp/app.py` and `scripts/1_collect_and_export.py` so the two
+front doors don't silently diverge. Re-ran the exact scenario that
+surfaced the bug against the live app: 14 -> 500, confirmed genuinely all
+1-3 star (200/95/205 split), no leakage.
 
-`docs/how-to-test.md` Part B now recommends the web app, keeping the
-terminal-script instructions as the manual fallback. `CLAUDE.md`'s folder
-tree updated to include `webapp/`.
+`CLAUDE.md`'s "Bounded pool" architecture bullet rewritten to describe
+per-rating targeted fetching (it still described the old, buggy
+fetch-then-filter behavior). `docs/how-to-test.md` Part B updated to
+explain what unchecking a rating actually does now.
 
 ---
 
 ## Commit log
+
+### `a8edeb8` — Add app search interface, fix a real google-play-scraper bug, add rule 6 (2026-08-09)
+Built `webapp/` - the project's first running interface (a small local
+Flask app), chosen over a terminal-picker alternative after Matheus
+reviewed the trade-off. Along the way, investigated and fixed a real bug
+in `google_play_scraper.search()`: it loses the app id specifically for
+Google's "exact match" top result card (verified live against 4 real
+queries) - usually the exact app someone typed, so this would have broken
+the single most common search. Fix reads the actual search page HTML for
+the first store listing link instead of the library's broken internal
+JSON index. `search_apps()` + `_recover_top_result_app_id()` in
+`motor/sources/google_play.py`, full TDD cycle, 8 new tests. Routes are
+thin wrappers over already-tested `motor/` functions, writing to the same
+`scripts/output/` paths the terminal workflow already uses. Also added
+`CLAUDE.md` rule 6: explain the reasoning and impact of every suggestion
+or action, in plain language, live in the conversation - Matheus's own
+framing is that this project is a learning vehicle for him as much as
+it's software.
 
 ### `75f11ee` — Document sampling/enrichment decisions, promote Opportunity Report pattern (2026-08-09)
 Registered two already-made-but-undocumented architecture decisions with

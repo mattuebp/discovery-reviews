@@ -59,14 +59,23 @@ system is designed to work for **any app**.
 - **Platform-neutral canonical schema.** Every adapter returns the same
   review record. That's what allows combining Google + App Store data in the
   future.
-- **Bounded pool + random subsample + optional rating filter.** Google Play
-  exposes no random-access review API — only sort-by-recent/relevant/rating
-  (confirmed by reading the installed `google_play_scraper` library's
-  source). So collection fetches one bounded pool (`count`, default 300),
-  then `motor/pipeline/selection.py`'s `random_sample()` and
-  `filter_by_rating()` narrow it down — genuinely random *within* that
-  pool. The resulting recency bias is never hidden: it's always disclosed
-  via `BIAS_DISCLAIMER` in every report, per rule 5.
+- **Bounded pool + random subsample + per-rating targeted fetch.** Google
+  Play exposes no random-access review API — only sort-by-recent/relevant
+  /rating (confirmed by reading the installed `google_play_scraper`
+  library's source). So collection fetches one bounded pool (`count`,
+  default 300) of the newest reviews, then `motor/pipeline/selection.py`'s
+  `random_sample()` narrows it down — genuinely random *within* that pool.
+  The resulting recency bias is never hidden: it's always disclosed via
+  `BIAS_DISCLAIMER` in every report, per rule 5. **When specific star
+  ratings are requested**, `GooglePlaySource.collect_by_ratings()` fetches
+  each selected rating as its *own* targeted pool (Google Play supports
+  server-side exact-rating filtering) instead of pulling one mixed pool and
+  filtering afterward — found and fixed live: an app whose recent reviews
+  skew positive (Hevy's newest 300 were 256 five-star) starves a low-star
+  filter down to almost nothing if filtering happens after the fetch,
+  since the filter is fighting a pool that was never built for it. With no
+  rating filter (the default), the single mixed pool stays — the natural
+  rating proportion is itself real signal, not something to flatten.
 - **Manual labeling is the default enrichment path, not automatic API
   calls.** Avoids a second, separately metered Anthropic bill stacked on an
   existing Claude subscription. Investigated first, not assumed: the Claude

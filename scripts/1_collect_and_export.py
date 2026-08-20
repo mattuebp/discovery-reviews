@@ -36,10 +36,24 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 source = GooglePlaySource()
-raw_reviews = list(source.collect(app_id=APP_ID, country=COUNTRY, count=POOL_SIZE))
+
+if RATING_FILTER is not None:
+    # Each requested rating gets its own targeted pool instead of one mixed
+    # newest-pool that can starve out less-common recent ratings (see
+    # GooglePlaySource.collect_by_ratings' docstring for the real case that
+    # motivated this - Hevy's newest 300 reviews were 256 five-star, so a
+    # 1-3-star filter applied afterward only ever found 14 matches).
+    raw_reviews = list(
+        source.collect_by_ratings(app_id=APP_ID, country=COUNTRY, ratings=RATING_FILTER, count_per_rating=POOL_SIZE)
+    )
+else:
+    raw_reviews = list(source.collect(app_id=APP_ID, country=COUNTRY, count=POOL_SIZE))
+
 reviews = deduplicate([normalize(r, platform="google_play", app_id=APP_ID, country=COUNTRY) for r in raw_reviews])
 
 if RATING_FILTER is not None:
+    # Defensive check, not the primary mechanism anymore - the fetch above
+    # already asked Google Play to pre-filter by exact rating.
     reviews = filter_by_rating(reviews, RATING_FILTER)
 
 reviews = random_sample(reviews, SAMPLE_SIZE)

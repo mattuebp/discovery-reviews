@@ -168,3 +168,79 @@ def test_recover_top_result_app_id_returns_none_when_no_link_is_found(monkeypatc
     monkeypatch.setattr(google_play_module, "_fetch_search_page", MagicMock(return_value="<html></html>"))
 
     assert google_play_module._recover_top_result_app_id("nothing", "us") is None
+
+
+# ---------------------------------------------------------------------------
+# Fetching by exact rating - fixes a real integrity problem Matheus hit
+# live: a rating filter applied *after* fetching one mixed newest-pool
+# starves out low-star reviews whenever an app's recent reviews skew
+# positive (verified: 256 of Hevy's newest 300 were 5-star, leaving only
+# 14 matching a 1-3-star filter). Google Play can pre-filter server-side
+# (`filter_score_with`) - verified live to return genuine matches spanning
+# months, not whatever survives one generic pool.
+# ---------------------------------------------------------------------------
+def test_collect_passes_filter_score_with_when_a_rating_is_given(monkeypatch):
+    fake_fetch = MagicMock(return_value=([], None))
+    monkeypatch.setattr(google_play_module, "_fetch_reviews", fake_fetch)
+
+    list(GooglePlaySource().collect(app_id="com.hevy", country="us", rating=1))
+
+    assert fake_fetch.call_args.kwargs.get("filter_score_with") == 1
+
+
+def test_collect_passes_no_score_filter_when_rating_is_none(monkeypatch):
+    # Regression guard: today's no-filter behavior (the "all ratings, one
+    # mixed pool" path) must stay exactly as it was.
+    fake_fetch = MagicMock(return_value=([], None))
+    monkeypatch.setattr(google_play_module, "_fetch_reviews", fake_fetch)
+
+    list(GooglePlaySource().collect(app_id="com.hevy", country="us"))
+
+    assert fake_fetch.call_args.kwargs.get("filter_score_with") is None
+
+
+def test_collect_by_ratings_calls_collect_once_per_requested_rating(monkeypatch):
+    fake_fetch = MagicMock(return_value=([], None))
+    monkeypatch.setattr(google_play_module, "_fetch_reviews", fake_fetch)
+
+    list(GooglePlaySource().collect_by_ratings(app_id="com.hevy", country="us", ratings=[1, 2, 3]))
+
+    assert fake_fetch.call_count == 3
+    requested_ratings = [call.kwargs.get("filter_score_with") for call in fake_fetch.call_args_list]
+    assert requested_ratings == [1, 2, 3]
+
+
+def test_collect_by_ratings_passes_count_per_rating_to_each_call(monkeypatch):
+    fake_fetch = MagicMock(return_value=([], None))
+    monkeypatch.setattr(google_play_module, "_fetch_reviews", fake_fetch)
+
+    list(
+        GooglePlaySource().collect_by_ratings(
+            app_id="com.hevy", country="us", ratings=[1, 2], count_per_rating=150
+        )
+    )
+
+    assert all(call.kwargs.get("count") == 150 for call in fake_fetch.call_args_list)
+
+
+def test_collect_by_ratings_merges_results_from_every_rating(monkeypatch):
+    responses = [
+        ([{"reviewId": "one-star-1"}], None),
+        ([{"reviewId": "two-star-1"}, {"reviewId": "two-star-2"}], None),
+    ]
+    fake_fetch = MagicMock(side_effect=responses)
+    monkeypatch.setattr(google_play_module, "_fetch_reviews", fake_fetch)
+
+    result = list(GooglePlaySource().collect_by_ratings(app_id="com.hevy", country="us", ratings=[1, 2]))
+
+    assert result == [{"reviewId": "one-star-1"}, {"reviewId": "two-star-1"}, {"reviewId": "two-star-2"}]
+
+
+def test_collect_by_ratings_returns_empty_list_for_an_empty_ratings_list(monkeypatch):
+    fake_fetch = MagicMock(return_value=([], None))
+    monkeypatch.setattr(google_play_module, "_fetch_reviews", fake_fetch)
+
+    result = list(GooglePlaySource().collect_by_ratings(app_id="com.hevy", country="us", ratings=[]))
+
+    assert result == []
+    fake_fetch.assert_not_called()

@@ -52,7 +52,10 @@ Google Play package id by hand.
    `Country / storefront`, e.g. `br`).
 4. Tick which star ratings to include (all five are checked by default -
    that means no filter, every rating), and set **how many reviews to
-   analyze**.
+   analyze**. Unchecking any rating fetches *just those ratings* directly
+   from Google Play, each with its own full pool - so narrowing to, say,
+   1-2 star reviews won't leave you starved for results just because an
+   app's most recent reviews happen to skew positive.
 5. Click **Collect & Export**. Your browser downloads
    `reviews_for_labeling.json` - move it into
    `C:\discovery-reviews\scripts\output\` (overwrite the old one if

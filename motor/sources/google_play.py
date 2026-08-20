@@ -30,13 +30,40 @@ DEFAULT_POOL_SIZE = 300
 class GooglePlaySource(ReviewSource):
     """Fetches reviews for one app from the Google Play store page."""
 
-    def collect(self, app_id: str, country: str, count: int = DEFAULT_POOL_SIZE) -> Iterable[dict[str, Any]]:
+    def collect(
+        self, app_id: str, country: str, count: int = DEFAULT_POOL_SIZE, rating: int | None = None
+    ) -> Iterable[dict[str, Any]]:
         # google_play_scraper.reviews() returns (list_of_raw_reviews, continuation_token).
         # The token is for paginating further - out of scope for this stage.
+        # `rating`, when given, asks Google Play to pre-filter server-side
+        # (filter_score_with) - see collect_by_ratings() for why that beats
+        # fetching one mixed pool and filtering afterward.
         raw_reviews, _continuation_token = _fetch_reviews(
-            app_id, country=country, count=count
+            app_id, country=country, count=count, filter_score_with=rating
         )
         return raw_reviews
+
+    def collect_by_ratings(
+        self, app_id: str, country: str, ratings: list[int], count_per_rating: int = DEFAULT_POOL_SIZE
+    ) -> Iterable[dict[str, Any]]:
+        """Fetch each rating in `ratings` as its own targeted pool, then
+        chain the results together.
+
+        Fixes a real integrity problem: fetching one mixed pool of the
+        newest reviews (any rating) and filtering afterward starves out
+        low-star reviews whenever an app's recent reviews skew positive -
+        verified live against Hevy, whose newest 300 reviews were 256
+        five-star and only 14 matched a 1-3-star filter. Requesting each
+        rating separately means every selected rating gets its own full
+        pool budget, instead of competing for scraps of one shared pool.
+        Each rating is still its own bounded, single request - see
+        CLAUDE.md's "Bounded pool" architecture decision.
+        """
+
+        all_raw_reviews = []
+        for rating in ratings:
+            all_raw_reviews.extend(self.collect(app_id, country, count=count_per_rating, rating=rating))
+        return all_raw_reviews
 
 
 @dataclass
