@@ -12,38 +12,67 @@
 
 # Session History
 
-## In progress — not yet committed (as of 2026-08-09)
+## In progress — not yet committed (as of 2026-08-20)
 
-**Fixed a real analysis-integrity bug: rating filters were starving on
-recency bias.** Matheus tested the web app, filtered to 1-3 star reviews
-with a sample size of 500, and got only 14 back. Walked through the actual
-mechanism with him live (not just "it's a known limitation"): `collect()`
-always fetched one pool of the 300 *newest* reviews of any rating, then
-filtered afterward - so if an app's recent reviews skew positive (Hevy's
-newest 300 were 256 five-star), a low-star filter is fighting a pool that
-was never built for it.
+**The Product Opportunity Report is finally a real Skill** - the piece
+explicitly deferred since the pattern was first drafted (see the `a8322c`
+entry below): "doc/skill work comes after the pattern is proven in tested
+code." That happened in `75f11ee`; this session closes the loop.
 
-Investigated before proposing a fix: confirmed live that Google Play
-supports server-side exact-rating filtering (`filter_score_with`) -
-requesting 100 one-star Hevy reviews returned 100 genuine ones spanning
-January to August, not a handful. Built `GooglePlaySource.collect_by_ratings()`
-- when specific ratings are selected, each one is fetched as its own
-targeted pool instead of sharing one mixed pool; with no rating filter
-(all 5 checked), the single mixed pool stays, since the natural rating
-proportion is itself real signal. Full TDD cycle, 6 new tests. Wired into
-both `webapp/app.py` and `scripts/1_collect_and_export.py` so the two
-front doors don't silently diverge. Re-ran the exact scenario that
-surfaced the bug against the live app: 14 -> 500, confirmed genuinely all
-1-3 star (200/95/205 split), no leakage.
+What happened:
+- Matheus collected a fresh, larger batch via the (now-fixed)
+  per-rating web app: 150 reviews, 1-3 star only. Hand-labeled all 150
+  through this conversation (144 got usable themes; 6 were too short/
+  generic). Saved to `scripts/output/labels.json` - already matching the
+  `reviews_raw.json` the web app writes server-side, so no file-juggling
+  needed even though Matheus downloaded a copy to his Desktop first.
+- Recomputed the report using the real `motor/pipeline/report.py`
+  functions this time (not a scratchpad script) and republished the same
+  Hevy artifact URL with the bigger batch. Important honesty catch: a
+  1-3-star-only sample structurally produces **zero Strength themes** -
+  made that explicit right next to the sentiment chart and as its own
+  empty-state box, instead of letting an empty section look like a
+  finding.
+- Matheus then asked for the report-building pattern itself to become a
+  real Skill (`.claude/skills/`), with a new instruction: split
+  opportunities into **Kind 1 (In-Product)** - bugs, pricing, sync, scoped
+  to the analyzed app's own backlog - versus **Kind 2 (New-Venture)** -
+  gaps that could become Matheus's own separate MVP, independent of the
+  analyzed app's roadmap. Wrote `.claude/skills/product-opportunity-report/SKILL.md`:
+  reuses the tested `assemble_report()`/`classify_theme()` pipeline for
+  Pain/Strength/Mixed, but treats the Kind 1/Kind 2 split as an explicit
+  judgment call made while drafting (a "would this stand alone as its own
+  pitch?" test), not something computed in `motor/` - it doesn't reduce to
+  a count or percentage the way Pain/Strength does.
+- The Skill hasn't been run yet on the current 150-review batch - the
+  published artifact still uses the old undifferentiated backlog/appendix
+  structure. Next session (or later this one) should re-run it with the
+  new Kind 1/Kind 2 split and republish.
 
-`CLAUDE.md`'s "Bounded pool" architecture bullet rewritten to describe
-per-rating targeted fetching (it still described the old, buggy
-fetch-then-filter behavior). `docs/how-to-test.md` Part B updated to
-explain what unchecking a rating actually does now.
+`docs/how-to-test.md` does not yet mention the Skill for non-technical
+readers - still pending, lower priority than getting the split itself
+right first.
 
 ---
 
 ## Commit log
+
+### `d88b053` — Fix rating filters being starved by recency bias (2026-08-09)
+Matheus filtered to 1-3 star reviews with sample size 500 and got only 14
+back. Root cause, walked through with him live: `collect()` fetched one
+pool of the 300 newest reviews of any rating, filtered afterward - an app
+whose recent reviews skew positive (Hevy's newest 300 were 256 five-star)
+starves a low-star filter down to almost nothing that way. Investigated
+before fixing: confirmed live that Google Play supports server-side
+exact-rating filtering (`filter_score_with`) - 100 requested one-star
+reviews returned 100 genuine ones spanning 7 months, not a handful. Built
+`GooglePlaySource.collect_by_ratings()`: each selected rating now fetched
+as its own targeted pool; with no filter, the single mixed pool stays
+(the natural rating proportion is real signal). Full TDD cycle, 6 new
+tests. Wired into both `webapp/app.py` and `scripts/1_collect_and_export.py`.
+Re-ran the exact scenario that surfaced the bug: 14 -> 500, confirmed
+genuinely all 1-3 star, no leakage. `CLAUDE.md`'s "Bounded pool"
+architecture bullet rewritten to match the new behavior.
 
 ### `a8edeb8` — Add app search interface, fix a real google-play-scraper bug, add rule 6 (2026-08-09)
 Built `webapp/` - the project's first running interface (a small local
